@@ -1,0 +1,333 @@
+package phonebook;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+
+public class Main {
+    public static void main(String[] args) throws IOException {
+        String directoryPath = "C:\\Users\\User\\Desktop\\directory.txt";
+        String findPath = "C:\\Users\\User\\Desktop\\find.txt";
+
+        /* Get all the lines from the files into lists */
+        List<String> directory = getOnlyCharacters(Files.readAllLines(Paths.get(directoryPath)));
+        List<String> find = Files.readAllLines(Paths.get(findPath));
+
+        SearchFactory factory = new SearchFactory(directory, find);
+        Algorithm linearSearch = factory.getAlgorithm("LinearSearch");
+        Algorithm bubbleSortJumpSearch = factory.getAlgorithm("BubbleSortJumpSearch");
+        Algorithm quickSortBinarySearch = factory.getAlgorithm("QuickSortBinarySearch");
+        Algorithm hashTableSearch = factory.getAlgorithm("HashTable");
+        linearSearch.execute();
+        bubbleSortJumpSearch.execute();
+        quickSortBinarySearch.execute();
+        hashTableSearch.execute();
+    }
+
+    /* Cuts digits from the directory values */
+    private static List<String> getOnlyCharacters(List<String> directory) {
+        for (int i = 0; i < directory.size(); i++) {
+            directory.set(i, directory.get(i).replaceAll("\\d", "").trim());
+        }
+        return directory;
+    }
+}
+
+interface Algorithm {
+
+    void execute();
+
+    static String timeConverter(long totalMilliseconds) {
+        /* Convert milliseconds into our time format */
+        long minutes = (totalMilliseconds / 1000) / 60;
+        long seconds = (totalMilliseconds / 1000) % 60;
+        long millis = totalMilliseconds - seconds * 1000;
+        return String.format("%2d min. %2d sec. %2d ms.", minutes, seconds, millis);
+    }
+
+    /* Output for linear, jump and binary search */
+    static void output(int matchCounter, long sortingTime, long searchTime, boolean isNextSearch, boolean isTooLong) {
+        if (!isNextSearch) {
+            System.out.printf("Found %d / %d entries. ", matchCounter, 500);
+            System.out.println("Time taken: " + timeConverter(searchTime) + "\n");
+        } else {
+            System.out.printf("Found %d / %d entries. ", matchCounter, 500);
+            System.out.println("Time taken: " + timeConverter(sortingTime + searchTime));
+            System.out.println("Sorting time: " + timeConverter(sortingTime) +
+                    (isTooLong ? "- STOPPED, moved to linear search" : ""));
+            System.out.println("Searching time: " + timeConverter(searchTime) + "\n");
+        }
+    }
+
+    /* Output for Hash table search */
+    static void output(int matchCounter, long createTime, long searchTime) {
+        System.out.println("Start searching (hash table)...");
+        System.out.printf("Found %d / %d entries. ", matchCounter, 500);
+        System.out.println("Time taken: " + timeConverter(createTime + searchTime));
+        System.out.println("Creating time: " + timeConverter(createTime));
+        System.out.println("Searching time: " + timeConverter(searchTime));
+    }
+}
+
+class SearchFactory {
+    private final List<String> directory;
+    private final List<String> find;
+
+    SearchFactory(List<String> directory, List<String> find) {
+        this.directory = directory;
+        this.find = find;
+    }
+
+    public Algorithm getAlgorithm(String algorithmType) {
+        switch (algorithmType) {
+            case "LinearSearch":
+                return new LinearSearch(directory, find);
+            case "BubbleSortJumpSearch":
+                return new BubbleSortJumpSearch(directory, find);
+            case "QuickSortBinarySearch":
+                return new QuickSortBinarySearch(directory, find);
+            case "HashTable":
+                return new HashTable(directory, find);
+            default:
+                return null;
+        }
+    }
+}
+
+class LinearSearch implements Algorithm {
+    private final List<String> directory;
+    private final List<String> find;
+    static int matchCounter = 0;
+    static long searchTime;
+
+    LinearSearch(List<String> directory, List<String> find) {
+        this.directory = new ArrayList<>(directory);
+        this.find = new ArrayList<>(find);
+    }
+
+    @Override
+    public void execute() {
+        System.out.println("Start searching (linear search)...");
+        linearSearch();
+        Algorithm.output(matchCounter, 0, searchTime, false, false);
+    }
+
+    protected void linearSearch() {
+        matchCounter = 0;
+
+        /* Start time in milliseconds */
+        long startTime = System.currentTimeMillis();
+
+        /* Search algorithm */
+        for (String findValue : find) {
+            for (String directoryValue : directory) {
+                if (directoryValue.contains(findValue)) {
+                    matchCounter++;
+                    break;
+                }
+            }
+        }
+
+        /* Total search time in milliseconds */
+        searchTime = System.currentTimeMillis() - startTime;
+    }
+}
+
+class BubbleSortJumpSearch implements Algorithm {
+    private final List<String> directory;
+    private final List<String> find;
+    long searchTime;
+    long sortingTime;
+    int matchCounter = 0;
+    static boolean isTooLong = false;
+
+    BubbleSortJumpSearch(List<String> directory, List<String> find) {
+        this.directory = new ArrayList<>(directory);
+        this.find = new ArrayList<>(find);
+    }
+
+    @Override
+    public void execute() {
+        bubbleSort();
+        if (isTooLong) {
+            long startTime = System.currentTimeMillis();
+            new LinearSearch(directory, find).linearSearch();
+            matchCounter = LinearSearch.matchCounter;
+            searchTime = System.currentTimeMillis() - startTime;
+        } else {
+            jumpSearch();
+        }
+        Algorithm.output(matchCounter, sortingTime, searchTime, true, isTooLong);
+    }
+
+    private void bubbleSort() {
+        System.out.println("Start searching (bubble sort + jump search)...");
+
+        long startTime = System.currentTimeMillis();
+
+        for (int i = 0; i < directory.size() - 1; i++) {
+            for (int j = 0; j < directory.size() - i - 1; j++) {
+                if (directory.get(j).compareTo(directory.get(j + 1)) > 0) {
+                    Collections.swap(directory, j, j + 1);
+                    sortingTime = System.currentTimeMillis() - startTime;
+
+                    /* Stops if sorting time takes too long */
+                    if (sortingTime > LinearSearch.searchTime * 10) {
+                        isTooLong = true;
+                        return;
+                    }
+                }
+            }
+        }
+    }
+
+    private void jumpSearch() {
+        int currentRight = 0;
+        int prevRight = 0;
+        int jumpLength = (int) Math.sqrt(directory.size());
+        boolean isFound = false;
+
+        if (directory.size() == 0 || find.size() == 0) {
+            searchTime = 0;
+            return;
+        }
+
+        long startTime = System.currentTimeMillis();
+
+        /* Jump search loop */
+        for (String findValue : find) {
+            if (directory.get(0).contains(findValue)) {
+                matchCounter++;
+            }
+            while (currentRight < directory.size() - 1) {
+
+                currentRight = Math.min(directory.size() - 1, currentRight + jumpLength);
+
+                if (directory.get(currentRight).compareTo(findValue) > 0) {
+                    isFound = true;
+                    break;
+                }
+                prevRight = currentRight;
+            }
+
+            /* Backward search in found block */
+            if (isFound) {
+                for (int j = currentRight; j > prevRight; j--) {
+                    if (directory.get(j).contains(findValue)) {
+                        matchCounter++;
+                    }
+                }
+            }
+        }
+        searchTime = System.currentTimeMillis() - startTime;
+    }
+}
+
+
+class QuickSortBinarySearch implements Algorithm {
+    private final List<String> directory;
+    private final List<String> find;
+    static int matchCounter = 0;
+    long sortingTime;
+    long searchTime;
+
+    QuickSortBinarySearch(List<String> directory, List<String> find) {
+        this.directory = new ArrayList<>(directory);
+        this.find = new ArrayList<>(find);
+    }
+
+    @Override
+    public void execute() {
+        System.out.println("Start searching (quick sort + binary search)...");
+
+        long startTime = System.currentTimeMillis();
+        quickSort(0, directory.size() - 1);
+        sortingTime = System.currentTimeMillis() - startTime;
+
+        startTime = System.currentTimeMillis();
+        for (String value : find) {
+            if (binarySearch(value)) {
+                matchCounter++;
+            }
+        }
+        searchTime = System.currentTimeMillis() - startTime;
+        Algorithm.output(matchCounter, sortingTime, searchTime, true, false);
+    }
+
+    private void quickSort(int left, int right) {
+        if (left < right) {
+            int pivotIndex = partition(left, right);
+            quickSort(left, pivotIndex - 1);
+            quickSort(pivotIndex + 1, right);
+        }
+    }
+
+    private int partition(int left, int right) {
+        String pivot = directory.get(right);
+        int partitionIndex = left;
+        for (int i = left; i < right; i++) {
+            if (directory.get(i).compareTo(pivot) < 0) {
+                Collections.swap(directory, i, partitionIndex);
+                partitionIndex++;
+            }
+        }
+        Collections.swap(directory, partitionIndex, right);
+        return partitionIndex;
+    }
+
+    private boolean binarySearch(String target) {
+        int left = 0;
+        int right = directory.size() - 1;
+
+        while (left <= right) {
+            int mid = left + (right - left) / 2;
+            String directoryValue = directory.get(mid);
+
+            if (directoryValue.contains(target)) {
+                return true;
+            } else if (directory.get(mid).compareTo(target) > 0) {
+                right = mid - 1;
+            } else {
+                left = mid + 1;
+            }
+        }
+        return false;
+    }
+}
+
+class HashTable implements Algorithm {
+    private final List<String> directory;
+    private final List<String> find;
+    int matchCounter = 0;
+    long createTime;
+    long searchTime;
+
+    HashTable(List<String> directory, List<String> find) {
+        this.directory = new ArrayList<>(directory);
+        this.find = new ArrayList<>(find);
+    }
+
+    public void execute() {
+        HashMap<String, String> directoryHashMap = new HashMap<>();
+
+        long startTime = System.currentTimeMillis();
+        for (String directoryValue : directory) {
+            directoryHashMap.put(directoryValue, directoryValue);
+        }
+        createTime = System.currentTimeMillis() - startTime;
+
+        startTime = System.currentTimeMillis();
+        for(String findValue : find) {
+            if (directoryHashMap.containsKey(findValue)) {
+                matchCounter++;
+            }
+        }
+        searchTime = System.currentTimeMillis() - startTime;
+
+        Algorithm.output(matchCounter, createTime, searchTime);
+    }
+}
